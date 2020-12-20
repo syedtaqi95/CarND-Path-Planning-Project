@@ -55,7 +55,7 @@ int main() {
   int lane = 1;
 
   // Define a reference velocity to target (mph)
-  double ref_vel = 49.5;
+  double ref_vel = 0.224;
 
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
                &map_waypoints_dx,&map_waypoints_dy, &lane, &ref_vel]
@@ -98,6 +98,53 @@ int main() {
           /******************************************************************/
 
           int prev_size = previous_path_x.size();
+
+          // Behavioural planner
+          // Generate ref vel and target lane using sensor fusion and localisation data
+
+          if (prev_size > 0) {
+            car_s = end_path_s;
+          }
+
+          bool too_close = false;
+
+          // Calculate ref velocity by checking other vehicles (obstacles)
+          for(int i = 0; i < sensor_fusion.size(); i++) {
+            
+            double obs_d = sensor_fusion[i][6];
+
+            // if obstacle is within ego lane boundaries
+            if ( (obs_d < (2+4*lane+2)) && (obs_d > (2+4*lane-2)) ) {
+              
+              double vx = sensor_fusion[i][3];
+              double vy = sensor_fusion[i][4];
+              double obs_speed = sqrt(pow(vx,2) + pow(vy,2));
+              double obs_s_pred = sensor_fusion[i][5];
+
+              // Predict obs s up to previous path size
+              obs_s_pred += (double)prev_size * 0.02 * obs_speed;
+
+              // if obs_s is greater than ego s and if gap is too close
+              if ( (obs_s_pred > car_s) && ((obs_s_pred - car_s) < 20) ) {
+                
+                // Do some logic here
+                too_close = true;
+
+              }
+            }
+          }
+
+          if(too_close) {
+            // reduce ref vel by max allowed accel (5 m/s2)
+            ref_vel -= 0.224;
+          }
+          else if(ref_vel < 49.5) {
+            // increase ref_vel by max allowed accel (5 m/s2)
+            ref_vel += 0.224;
+          }
+
+          // Trajectory generation
+          // Use the ref_vel, target lane info to generate a smooth trajectory using spline
 
           // Actual x,y points used in the output
           vector<double> next_x_vals;
