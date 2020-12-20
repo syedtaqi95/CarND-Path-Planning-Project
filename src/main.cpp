@@ -51,8 +51,14 @@ int main() {
     map_waypoints_dy.push_back(d_y);
   }
 
+  // Define lane = 0 (left), 1 (middle), 2 (right)
+  int lane = 1;
+
+  // Define a reference velocity to target (mph)
+  double ref_vel = 49.5;
+
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
-               &map_waypoints_dx,&map_waypoints_dy]
+               &map_waypoints_dx,&map_waypoints_dy, &lane, &ref_vel]
               (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -89,15 +95,121 @@ int main() {
           //   of the road.
           auto sensor_fusion = j[1]["sensor_fusion"];
 
-          json msgJson;
+          /******************************************************************/
 
+          int prev_size = previous_path_x.size();
+
+          // Actual x,y points used in the output
           vector<double> next_x_vals;
           vector<double> next_y_vals;
 
-          /**
-           * TODO: define a path made up of (x,y) points that the car will visit
-           *   sequentially every .02 seconds
-           */
+          // Load previous path points into next_x/y_vals
+          for (int i = 0; i < prev_size; i++) {
+            next_x_vals.push_back(previous_path_x[i]);
+            next_y_vals.push_back(previous_path_y[i]);
+          }
+
+          // Create a vector of sparsely spaced waypoints
+          // Use this to create a spline to generate the trajectory
+          vector<double> sparse_wp_x;
+          vector<double> sparse_wp_y;
+
+          // Reference x, y, yaw of ego vehicle
+          // Either set to ego's current pos or at the previous path's end point
+          double ref_x = car_x;
+          double ref_y = car_y;
+          double ref_yaw = deg2rad(car_yaw); //rad
+
+          // if previous points are almost empty, use the ego as starting ref
+          if (prev_size < 2) {
+            
+            // Use a point tangent to the ego
+            double prev_car_x = car_x - cos(car_yaw);
+            double prev_car_y = car_y - sin(car_yaw);
+
+            // Add to sparse wp vectors
+            sparse_wp_x.push_back(prev_car_x);
+            sparse_wp_x.push_back(car_x);
+            sparse_wp_y.push_back(prev_car_y);
+            sparse_wp_y.push_back(car_y);
+          }
+          else {
+              
+            // Set ref points to previous path's end point
+            // This is because the received data is 1 cycle out of date
+            ref_x = previous_path_x[prev_size-1];
+            ref_y = previous_path_y[prev_size-1];
+
+            double ref_x_prev = previous_path_x[prev_size-2];
+            double ref_y_prev = previous_path_y[prev_size-2];
+            ref_yaw = atan2(ref_y - ref_y_prev, ref_x - ref_x_prev);
+
+            // Add to sparse wp vectors
+            sparse_wp_x.push_back(ref_x_prev);
+            sparse_wp_x.push_back(ref_x);
+            sparse_wp_y.push_back(ref_y_prev);
+            sparse_wp_y.push_back(ref_y);
+
+          }
+
+          // Add wp's 30m, 60m and 90m ahead in s, in the same lane (d) 
+          for (int i = 1; i < 4; i++) {
+            vector<double> next_wp = getXY(car_s + i*30, 2 + lane*4, map_waypoints_s, 
+                                      map_waypoints_x, map_waypoints_y);
+            sparse_wp_x.push_back(next_wp[0]);
+            sparse_wp_y.push_back(next_wp[1]);
+          }
+
+          // Convert from global to local ego coordinates
+          for (int i = 0; i < sparse_wp_x.size(); i++) {
+            
+            // shift points so ego vehicle is at origin
+            double shift_x = sparse_wp_x[i] - ref_x;
+            double shift_y = sparse_wp_y[i] - ref_y;
+
+            // rotate so that reference angle is 0 degrees
+            sparse_wp_x[i] = (shift_x * cos(0-ref_yaw) - shift_y*sin(0-ref_yaw));
+            sparse_wp_y[i] = (shift_x * sin(0-ref_yaw) + shift_y*cos(0-ref_yaw));
+          }
+
+          // Create a spline
+          tk::spline sp;
+
+          // Set x,y points in spline
+          sp.set_points(sparse_wp_x, sparse_wp_y);          
+
+          // Calculate how to break up our spline so we travel at the ref velocity
+          double target_x = 30.0;
+          double target_y = sp(target_x);
+          double target_dist = sqrt( pow(target_x,2) + pow(target_y,2) );
+
+          double x_add_on = 0;
+          double N = target_dist / (0.02 * ref_vel / 2.24); //2.24 converts mph to m/s
+
+          // Fill up next_x/y_vals so there are total 50 points
+          for (int i = 1; i <= 50 - prev_size; i++) {
+            
+            double x_point = x_add_on + target_x/N;
+            double y_point = sp(x_point);
+
+            x_add_on = x_point;
+
+            // Convert back from local to global coordinates
+            double x_ref = x_point;
+            double y_ref = y_point;
+            x_point = x_ref * cos(ref_yaw) - y_ref*sin(ref_yaw);
+            y_point = x_ref * sin(ref_yaw) + y_ref*cos(ref_yaw);
+
+            x_point += ref_x;
+            y_point += ref_y;
+
+            next_x_vals.push_back(x_point);
+            next_y_vals.push_back(y_point);
+          }
+
+          /******************************************************************/
+
+          json msgJson;
 
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
