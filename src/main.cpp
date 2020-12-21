@@ -8,6 +8,7 @@
 #include "helpers.h"
 #include "json.hpp"
 #include "spline.h"
+//#include "vehicle.h"
 
 // for convenience
 using nlohmann::json;
@@ -50,15 +51,17 @@ int main() {
     map_waypoints_dx.push_back(d_x);
     map_waypoints_dy.push_back(d_y);
   }
-
-  // Define lane = 0 (left), 1 (middle), 2 (right)
-  int lane = 1;
-
-  // Define a reference velocity to target (mph)
-  double ref_vel = 0.224;
+  
+  // Some useful variables
+  int lane = 1; // lane = 0 (left), 1 (middle), 2 (right)  
+  double ref_vel = 0.224; // reference velocity to target (mph)
+  double MAX_VEL = 49.5; // max velocity (mph)
+  double MIN_GAP = 20.0; // minimum gap size between ego and front obstacle vehicle in lane
+  double SPARSE_WP_DIST = 30.0; // generate sparse waypoints spaced this far apart
 
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
-               &map_waypoints_dx,&map_waypoints_dy, &lane, &ref_vel]
+               &map_waypoints_dx,&map_waypoints_dy, &lane, &ref_vel, 
+               &MAX_VEL, &MIN_GAP, &SPARSE_WP_DIST]
               (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -101,9 +104,10 @@ int main() {
 
           // Behavioural planner
           // Generate ref vel and target lane using sensor fusion and localisation data
-
+          
+          double car_s_pred = car_s;
           if (prev_size > 0) {
-            car_s = end_path_s;
+            car_s_pred = end_path_s;
           }
 
           bool too_close = false;
@@ -125,7 +129,7 @@ int main() {
               obs_s_pred += (double)prev_size * 0.02 * obs_speed;
 
               // if obs_s is greater than ego s and if gap is too close
-              if ( (obs_s_pred > car_s) && ((obs_s_pred - car_s) < 20) ) {
+              if ( (obs_s_pred > car_s_pred) && ((obs_s_pred - car_s_pred) < MIN_GAP) ) {
                 
                 // Do some logic here
                 too_close = true;
@@ -138,7 +142,7 @@ int main() {
             // reduce ref vel by max allowed accel (5 m/s2)
             ref_vel -= 0.224;
           }
-          else if(ref_vel < 49.5) {
+          else if(ref_vel < MAX_VEL) {
             // increase ref_vel by max allowed accel (5 m/s2)
             ref_vel += 0.224;
           }
@@ -182,8 +186,9 @@ int main() {
           }
           else {
               
-            // Set ref points to previous path's end point
-            // This is because the received data is 1 cycle out of date
+            // Set ref points to previous path's end point and calculate the yaw
+            // This is a more accurate reading than simply using the localisation data which
+            // is out of date 
             ref_x = previous_path_x[prev_size-1];
             ref_y = previous_path_y[prev_size-1];
 
@@ -199,9 +204,10 @@ int main() {
 
           }
 
-          // Add wp's 30m, 60m and 90m ahead in s, in the same lane (d) 
+          // Add wp's spaced SPARSE_WP_DIST apart in s, in the same lane (d) 
+          // Using highly spaced wp's to minimise jerk and acceleration
           for (int i = 1; i < 4; i++) {
-            vector<double> next_wp = getXY(car_s + i*30, 2 + lane*4, map_waypoints_s, 
+            vector<double> next_wp = getXY(car_s + i*SPARSE_WP_DIST, 2 + lane*4, map_waypoints_s, 
                                       map_waypoints_x, map_waypoints_y);
             sparse_wp_x.push_back(next_wp[0]);
             sparse_wp_y.push_back(next_wp[1]);
