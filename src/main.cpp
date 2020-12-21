@@ -56,24 +56,24 @@ int main() {
   double goal_s = max_s;
   double goal_lane = 1; // lane = 0 (left), 1 (middle), 2 (right)  
   double lane = 1; // current lane 
-  double ref_vel = 0.224; // reference velocity to target (mph), init to 10 m/s i.e. max accel
+  double ref_vel = 0.; // reference velocity to target (mph)
   double SPEED_LIMIT = 49.5; // max velocity (mph)
-  double MIN_GAP = 20.0; // minimum gap size between ego and front obstacle vehicle in lane
-  double SPARSE_WP_DIST = 30.0; // generate sparse waypoints spaced this far apart
+  double MIN_GAP = 20.; // minimum gap between ego and front obstacle vehicle in lane
+  double SPARSE_WP_DIST = 30.; // generate sparse waypoints spaced this far apart
+  double dt = 0.02; // time in seconds between path points
 
   // Create ego vehicle
-  Vehicle ego = Vehicle(lane, 0, 0, 0);
+  Vehicle ego = Vehicle(lane, 0., ref_vel, 0.);
 
   // Configure ego vehicle  
-  // configuration data: speed limit, num_lanes, goal_s, goal_lane
-  double num_lanes = 3;
-  vector<double> ego_config = {SPEED_LIMIT,num_lanes,goal_s,goal_lane};
+  // configuration data: speed limit, goal_s, goal_lane
+  vector<double> ego_config = {SPEED_LIMIT,goal_s,goal_lane};
   ego.configure(ego_config);
   ego.state = "KL";
 
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
                &map_waypoints_dx,&map_waypoints_dy, &lane, &ref_vel, 
-               &SPEED_LIMIT, &MIN_GAP, &SPARSE_WP_DIST]
+               &SPEED_LIMIT, &MIN_GAP, &SPARSE_WP_DIST, &dt, &ego]
               (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -108,11 +108,31 @@ int main() {
 
           // Sensor Fusion Data, a list of all other cars on the same side 
           //   of the road.
+          // [ id, x, y, vx, vy, s, d]
           auto sensor_fusion = j[1]["sensor_fusion"];
 
           /******************************************************************/
 
-          int prev_size = previous_path_x.size();
+          // Update ego localisation data
+          // x, y, s, d, yaw, speed
+          vector<double> local_data = {car_x, car_y, car_s, car_d, car_yaw, car_speed};
+          ego.update_localisation_data(local_data);          
+
+          // Update ego previous path data
+          vector<double> prev_x = previous_path_x; // to remove g++ compiler error 
+          vector<double> prev_y = previous_path_y; // to remove g++ compiler error 
+          ego.update_previous_path_data(prev_x, prev_y, end_path_s, end_path_d);
+
+          
+          
+
+          // Generate predictions for obstacle vehicles
+          vector<vector<Vehicle>> predictions;
+          for (int i = 0; i < sensor_fusion.size(); i++) {
+            //Vehicle non_ego = Vehicle(int lane, float s, float v, float a, std::string state = "CS");
+          }
+
+          /* Code from classroom walkthrough
 
           // Behavioural planner
           // Generate ref vel and target lane using sensor fusion and localisation data
@@ -159,8 +179,12 @@ int main() {
             ref_vel += 0.224;
           }
 
+          */
+
           // Trajectory generation
           // Use the ref_vel, target lane info to generate a smooth trajectory using spline
+
+          int prev_size = previous_path_x.size();
 
           // Actual x,y points used in the output
           vector<double> next_x_vals;
@@ -244,12 +268,12 @@ int main() {
           sp.set_points(sparse_wp_x, sparse_wp_y);          
 
           // Calculate how to break up our spline so we travel at the ref velocity
-          double target_x = 30.0;
+          double target_x = 30.;
           double target_y = sp(target_x);
           double target_dist = sqrt( pow(target_x,2) + pow(target_y,2) );
 
           double x_add_on = 0;
-          double N = target_dist / (0.02 * ref_vel / 2.24); //2.24 converts mph to m/s
+          double N = target_dist / (dt * ref_vel / 2.24); //2.24 converts mph to m/s
 
           // Fill up next_x/y_vals so there are total 50 points
           for (int i = 1; i <= 50 - prev_size; i++) {
