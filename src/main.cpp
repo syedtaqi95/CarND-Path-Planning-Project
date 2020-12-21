@@ -8,6 +8,7 @@
 #include "helpers.h"
 #include "json.hpp"
 #include "spline.h"
+#include "vehicle.h"
 
 // for convenience
 using nlohmann::json;
@@ -52,15 +53,27 @@ int main() {
   }
   
   // Some useful variables
-  int lane = 1; // lane = 0 (left), 1 (middle), 2 (right)  
-  double ref_vel = 0.224; // reference velocity to target (mph)
-  double MAX_VEL = 49.5; // max velocity (mph)
+  double goal_s = max_s;
+  double goal_lane = 1; // lane = 0 (left), 1 (middle), 2 (right)  
+  double lane = 1; // current lane 
+  double ref_vel = 0.224; // reference velocity to target (mph), init to 10 m/s i.e. max accel
+  double SPEED_LIMIT = 49.5; // max velocity (mph)
   double MIN_GAP = 20.0; // minimum gap size between ego and front obstacle vehicle in lane
   double SPARSE_WP_DIST = 30.0; // generate sparse waypoints spaced this far apart
 
+  // Create ego vehicle
+  Vehicle ego = Vehicle(lane, 0, 0, 0);
+
+  // Configure ego vehicle  
+  // configuration data: speed limit, num_lanes, goal_s, goal_lane
+  double num_lanes = 3;
+  vector<double> ego_config = {SPEED_LIMIT,num_lanes,goal_s,goal_lane};
+  ego.configure(ego_config);
+  ego.state = "KL";
+
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
                &map_waypoints_dx,&map_waypoints_dy, &lane, &ref_vel, 
-               &MAX_VEL, &MIN_GAP, &SPARSE_WP_DIST]
+               &SPEED_LIMIT, &MIN_GAP, &SPARSE_WP_DIST]
               (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -141,7 +154,7 @@ int main() {
             // reduce ref vel by max allowed accel (5 m/s2)
             ref_vel -= 0.224;
           }
-          else if(ref_vel < MAX_VEL) {
+          else if(ref_vel < SPEED_LIMIT) {
             // increase ref_vel by max allowed accel (5 m/s2)
             ref_vel += 0.224;
           }
