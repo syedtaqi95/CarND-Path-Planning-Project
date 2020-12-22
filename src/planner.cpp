@@ -14,7 +14,7 @@ vector<vector<double>> trajectory_gen( const vector<double> &previous_path_x,
   
   // Useful variables                                       
   int prev_size = previous_path_x.size();
-  double SPARSE_WP_DIST = 30.; // generate sparse waypoints spaced this far apart
+  double ANCHOR_WPS_DIST = 30.; // generate sparse waypoints spaced this far apart
   double dt = 0.02; // time in seconds between path points
 
   // Actual x,y points used in the output
@@ -29,8 +29,8 @@ vector<vector<double>> trajectory_gen( const vector<double> &previous_path_x,
 
   // Create a vector of sparsely spaced waypoints
   // Use this to create a spline to generate the trajectory
-  vector<double> sparse_wp_x;
-  vector<double> sparse_wp_y;
+  vector<double> anchor_points_x;
+  vector<double> anchor_points_y;
 
   // Reference x, y, yaw of ego vehicle
   // Either set to ego's current pos or at the previous path's end point
@@ -46,10 +46,10 @@ vector<vector<double>> trajectory_gen( const vector<double> &previous_path_x,
   double prev_car_y = car_y - sin(car_yaw);
 
   // Add to sparse wp vectors
-  sparse_wp_x.push_back(prev_car_x);
-  sparse_wp_x.push_back(car_x);
-  sparse_wp_y.push_back(prev_car_y);
-  sparse_wp_y.push_back(car_y);
+  anchor_points_x.push_back(prev_car_x);
+  anchor_points_x.push_back(car_x);
+  anchor_points_y.push_back(prev_car_y);
+  anchor_points_y.push_back(car_y);
   }
   else {
       
@@ -64,39 +64,39 @@ vector<vector<double>> trajectory_gen( const vector<double> &previous_path_x,
   ref_yaw = atan2(ref_y - ref_y_prev, ref_x - ref_x_prev);
 
   // Add to sparse wp vectors
-  sparse_wp_x.push_back(ref_x_prev);
-  sparse_wp_x.push_back(ref_x);
-  sparse_wp_y.push_back(ref_y_prev);
-  sparse_wp_y.push_back(ref_y);
+  anchor_points_x.push_back(ref_x_prev);
+  anchor_points_x.push_back(ref_x);
+  anchor_points_y.push_back(ref_y_prev);
+  anchor_points_y.push_back(ref_y);
 
   }
 
-  // Add wp's spaced SPARSE_WP_DIST apart in s, in the same target_lane (d) 
+  // Add wp's spaced ANCHOR_WPS_DIST apart in s, in the same target_lane (d) 
   // Using highly spaced wp's to minimise jerk and acceleration
   for (int i = 1; i < 4; i++) {
-  vector<double> next_wp = getXY(car_s + i*SPARSE_WP_DIST, 2 + target_lane*4, map_waypoints_s, 
+  vector<double> next_wp = getXY(car_s + i*ANCHOR_WPS_DIST, 2 + target_lane*4, map_waypoints_s, 
                               map_waypoints_x, map_waypoints_y);
-  sparse_wp_x.push_back(next_wp[0]);
-  sparse_wp_y.push_back(next_wp[1]);
+  anchor_points_x.push_back(next_wp[0]);
+  anchor_points_y.push_back(next_wp[1]);
   }
 
   // Convert from global to local ego coordinates
-  for (int i = 0; i < sparse_wp_x.size(); i++) {
+  for (int i = 0; i < anchor_points_x.size(); i++) {
   
   // shift points so ego vehicle is at origin
-  double shift_x = sparse_wp_x[i] - ref_x;
-  double shift_y = sparse_wp_y[i] - ref_y;
+  double shift_x = anchor_points_x[i] - ref_x;
+  double shift_y = anchor_points_y[i] - ref_y;
 
   // rotate so that reference angle is 0 degrees
-  sparse_wp_x[i] = (shift_x * cos(0-ref_yaw) - shift_y*sin(0-ref_yaw));
-  sparse_wp_y[i] = (shift_x * sin(0-ref_yaw) + shift_y*cos(0-ref_yaw));
+  anchor_points_x[i] = (shift_x * cos(0-ref_yaw) - shift_y*sin(0-ref_yaw));
+  anchor_points_y[i] = (shift_x * sin(0-ref_yaw) + shift_y*cos(0-ref_yaw));
   }
 
   // Create a spline
   tk::spline sp;
 
   // Set x,y points in spline
-  sp.set_points(sparse_wp_x, sparse_wp_y);          
+  sp.set_points(anchor_points_x, anchor_points_y);          
 
   // Calculate how to break up our spline so we travel at the ref velocity
   double target_x = 30.;
