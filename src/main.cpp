@@ -101,8 +101,6 @@ int main() {
 
           /********************************************************************************/
 
-          //Code from classroom walkthrough
-
           // Behavioural planner
           // Generate ref vel and target lane using sensor fusion and localisation data
           behaviour_planner( previous_path_x, 
