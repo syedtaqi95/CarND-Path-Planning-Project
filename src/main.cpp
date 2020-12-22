@@ -55,12 +55,13 @@ int main() {
   double target_lane = 1; // target lane for trajectory
   double current_lane = 1; // current lane of ego vehicle
   double ref_vel = 0.224; // reference velocity to target (mph)
-  double SPEED_LIMIT = 49.5; // max velocity (mph)
-  double MIN_GAP = 20.; // minimum gap between ego and front obstacle vehicle in lane
+  string current_state = "KL";
+  string next_state = "KL";
+  
 
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
                &map_waypoints_dx,&map_waypoints_dy, &target_lane, &current_lane,
-               &ref_vel, &SPEED_LIMIT, &MIN_GAP]
+               &ref_vel, &current_state, &next_state]
               (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -104,66 +105,29 @@ int main() {
 
           // Behavioural planner
           // Generate ref vel and target lane using sensor fusion and localisation data
-
-          int prev_size = previous_path_x.size();
-
-          current_lane = floor(car_d / 4);
-
-          std::cout << "car_d: " << car_d << " lane: " << current_lane << std::endl;
-          
-          if (prev_size > 0) {
-            car_s = end_path_s;
-          }
-
-          bool too_close = false;
-
-          // Calculate ref velocity by checking other vehicles (obstacles)
-          for(int i = 0; i < sensor_fusion.size(); i++) {
-            
-            double obs_d = sensor_fusion[i][6];
-
-            // if obstacle is within ego lane boundaries
-            if ( (obs_d < (2+4*current_lane+2)) && (obs_d > (2+4*current_lane-2)) ) {
-              
-              double vx = sensor_fusion[i][3];
-              double vy = sensor_fusion[i][4];
-              double obs_speed = sqrt(pow(vx,2) + pow(vy,2));
-              double obs_s_pred = sensor_fusion[i][5];
-
-              // Predict obs s up to previous path size
-              obs_s_pred += (double)prev_size * 0.02 * obs_speed;
-
-              // if obs_s is greater than ego s and if gap is too close
-              if ( (obs_s_pred > car_s) && ((obs_s_pred - car_s) < MIN_GAP) ) {
-                
-                // Do some logic here
-                too_close = true;
-
-              }
-            }
-          }
-
-          if(too_close) {
-            // reduce ref vel by max allowed accel (5 m/s2)
-            ref_vel -= 0.224;
-          }
-          else if(ref_vel < SPEED_LIMIT) {
-            // increase ref_vel by max allowed accel (5 m/s2)
-            ref_vel += 0.224;
-          }
+          behaviour_planner( previous_path_x, 
+            previous_path_y, 
+            current_lane,
+            car_d, car_s,
+            end_path_s,
+            sensor_fusion,
+            ref_vel,
+            current_state, 
+            next_state
+          );          
 
           // Trajectory generation          
           vector<vector<double>> next_vals = 
-            generate_trajectory( 
-                            previous_path_x, 
-                            previous_path_y, 
-                            car_x, car_y, car_yaw,
-                            car_s, target_lane, 
-                            map_waypoints_x,
-                            map_waypoints_y,
-                            map_waypoints_s,
-                            ref_vel 
-                          );
+          generate_trajectory( 
+            previous_path_x, 
+            previous_path_y, 
+            car_x, car_y, car_yaw,
+            car_s, target_lane, 
+            map_waypoints_x,
+            map_waypoints_y,
+            map_waypoints_s,
+            ref_vel 
+          );
 
           /********************************************************************************/
 

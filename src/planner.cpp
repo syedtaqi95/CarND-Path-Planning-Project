@@ -1,16 +1,106 @@
 #include "planner.h"
 
 using std::vector;
+using std::map;
+
+void behaviour_planner( const vector<double> &previous_path_x, 
+                        const vector<double> &previous_path_y, 
+                        double &current_lane,
+                        double &car_d, double &car_s,
+                        double &end_path_s,
+                        const vector<vector<double>> &sensor_fusion,
+                        double &ref_vel,
+                        string &current_state,
+                        string &next_state) {
+
+  // Useful variables
+  double SPEED_LIMIT = 49.5; // max velocity (mph)
+  double MIN_GAP = 20.; // minimum gap between ego and front obstacle vehicle in lane
+  int prev_size = previous_path_x.size();
+  current_lane = floor(car_d / 4);
+  
+  if (prev_size > 0) {
+    car_s = end_path_s;
+  }
+
+  bool too_close = false;
+
+  // Create vectors to store the non-ego vehicle data in each lane
+  vector<double> vehicles_in_lane0;
+  vector<double> vehicles_in_lane1;
+  vector<double> vehicles_in_lane2;
+
+  double speed_car_ahead = 0.;
+
+  // Loop through sensor fusion
+  for(int i = 0; i < sensor_fusion.size(); i++) {
+    
+    double obs_d = sensor_fusion[i][6];
+    double obs_lane = floor(obs_d/4);
+    double vx = sensor_fusion[i][3];
+    double vy = sensor_fusion[i][4];
+    double obs_speed = sqrt(pow(vx,2) + pow(vy,2));
+    double obs_s = sensor_fusion[i][5];
+
+    obs_s += (double)prev_size * 0.02 * obs_speed;
+
+    if (obs_lane == 0) { // Lane 0
+      if (abs(obs_s - car_s) <= 20) { // If within 20m of ego
+        vehicles_in_lane0.push_back(i);
+      }      
+    }
+    else if (obs_lane == 1) { // Lane 1
+      if (abs(obs_s - car_s) <= 20) { // If within 20m of ego
+        vehicles_in_lane1.push_back(i);
+      }      
+    }
+    else if (obs_lane == 2) { // Lane 2
+      if (abs(obs_s - car_s) <= 20) { // If within 20m of ego
+        vehicles_in_lane2.push_back(i);
+      }      
+    }
+
+    // if in same lane as ego
+    if ( obs_lane == current_lane ) {
+      speed_car_ahead = obs_speed;
+      // if obs_s is greater than ego s and if gap is less than threshold, flag too close
+      if ( (obs_s > car_s) && ((obs_s - car_s) < MIN_GAP) ) {        
+        too_close = true;        
+      }
+    }
+  } 
+
+  if(too_close) {
+    // Lane change cases
+
+    // reduce ref vel by max allowed accel (5 m/s2)
+    if(ref_vel >= speed_car_ahead){
+        ref_vel -= 0.224;
+        std::cout << "car_s: " << car_s << " Front vehicle is close, ego slowing down" << std::endl;
+    }
+    //Try to maintain the speed of car in front
+    else if(ref_vel < speed_car_ahead){
+        ref_vel += 0.224;
+        std::cout << "car_s: " << car_s << " Front vehicle is too close, ego speeding up" << std::endl;
+    }
+  }
+  else if(ref_vel < SPEED_LIMIT) {
+    // increase ref_vel by max accel
+    ref_vel += 0.224;
+  }
+
+} // end behaviour_planner
+
 
 //Use the ref_vel, target lane info to generate a smooth trajectory using spline
 vector<vector<double>> generate_trajectory( const vector<double> &previous_path_x, 
-                                       const vector<double> &previous_path_y, 
-                                       double &car_x, double &car_y, double &car_yaw,
-                                       double &car_s, double &target_lane, 
-                                       vector<double> &map_waypoints_x,
-                                       vector<double> &map_waypoints_y,
-                                       vector<double> &map_waypoints_s,
-                                       double &ref_vel ) {
+                                            const vector<double> &previous_path_y, 
+                                            double &car_x, double &car_y, double &car_yaw,
+                                            double &car_s, double &target_lane, 
+                                            vector<double> &map_waypoints_x,
+                                            vector<double> &map_waypoints_y,
+                                            vector<double> &map_waypoints_s,
+                                            double &ref_vel ) {
   
   // Useful variables                                       
   int prev_size = previous_path_x.size();
@@ -133,4 +223,4 @@ vector<vector<double>> generate_trajectory( const vector<double> &previous_path_
 
   return output_vector;
 
-}
+} // end generate_trajectory
