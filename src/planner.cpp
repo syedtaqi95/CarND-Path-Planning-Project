@@ -1,4 +1,4 @@
-#include "trajectory.h"
+#include "planner.h"
 
 using std::vector;
 
@@ -6,7 +6,7 @@ using std::vector;
 vector<vector<double>> trajectory_gen( const vector<double> &previous_path_x, 
                                        const vector<double> &previous_path_y, 
                                        double &car_x, double &car_y, double &car_yaw,
-                                       double &car_s, double &lane, 
+                                       double &car_s, double &target_lane, 
                                        vector<double> &map_waypoints_x,
                                        vector<double> &map_waypoints_y,
                                        vector<double> &map_waypoints_s,
@@ -71,10 +71,10 @@ vector<vector<double>> trajectory_gen( const vector<double> &previous_path_x,
 
   }
 
-  // Add wp's spaced SPARSE_WP_DIST apart in s, in the same lane (d) 
+  // Add wp's spaced SPARSE_WP_DIST apart in s, in the same target_lane (d) 
   // Using highly spaced wp's to minimise jerk and acceleration
   for (int i = 1; i < 4; i++) {
-  vector<double> next_wp = getXY(car_s + i*SPARSE_WP_DIST, 2 + lane*4, map_waypoints_s, 
+  vector<double> next_wp = getXY(car_s + i*SPARSE_WP_DIST, 2 + target_lane*4, map_waypoints_s, 
                               map_waypoints_x, map_waypoints_y);
   sparse_wp_x.push_back(next_wp[0]);
   sparse_wp_y.push_back(next_wp[1]);

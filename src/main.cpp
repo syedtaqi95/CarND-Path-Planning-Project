@@ -6,7 +6,7 @@
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
-#include "trajectory.h"
+#include "planner.h"
 
 // for convenience
 using nlohmann::json;
@@ -52,16 +52,15 @@ int main() {
   }
   
   // Some useful variables
-  double goal_s = max_s;
-  double goal_lane = 1; // lane = 0 (left), 1 (middle), 2 (right)  
-  double lane = 1; // current lane 
-  double ref_vel = 0.; // reference velocity to target (mph)
+  double target_lane = 1; // target lane for trajectory
+  double current_lane = 1; // current lane of ego vehicle
+  double ref_vel = 0.224; // reference velocity to target (mph)
   double SPEED_LIMIT = 49.5; // max velocity (mph)
   double MIN_GAP = 20.; // minimum gap between ego and front obstacle vehicle in lane
 
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,
-               &map_waypoints_dx,&map_waypoints_dy, &lane, &ref_vel, 
-               &SPEED_LIMIT, &MIN_GAP]
+               &map_waypoints_dx,&map_waypoints_dy, &target_lane, &current_lane,
+               &ref_vel, &SPEED_LIMIT, &MIN_GAP]
               (uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -99,12 +98,18 @@ int main() {
           // [ id, x, y, vx, vy, s, d]
           auto sensor_fusion = j[1]["sensor_fusion"];
 
+          /********************************************************************************/
+
           //Code from classroom walkthrough
 
           // Behavioural planner
           // Generate ref vel and target lane using sensor fusion and localisation data
 
           int prev_size = previous_path_x.size();
+
+          current_lane = floor(car_d / 4);
+
+          std::cout << "car_d: " << car_d << " lane: " << current_lane << std::endl;
           
           if (prev_size > 0) {
             car_s = end_path_s;
@@ -118,7 +123,7 @@ int main() {
             double obs_d = sensor_fusion[i][6];
 
             // if obstacle is within ego lane boundaries
-            if ( (obs_d < (2+4*lane+2)) && (obs_d > (2+4*lane-2)) ) {
+            if ( (obs_d < (2+4*current_lane+2)) && (obs_d > (2+4*current_lane-2)) ) {
               
               double vx = sensor_fusion[i][3];
               double vy = sensor_fusion[i][4];
@@ -148,17 +153,19 @@ int main() {
           }
 
           // Trajectory generation          
-          vector<vector<double>> next_vals = trajectory_gen( 
-                                            previous_path_x, 
-                                            previous_path_y, 
-                                            car_x, car_y, car_yaw,
-                                            car_s, lane, 
-                                            map_waypoints_x,
-                                            map_waypoints_y,
-                                            map_waypoints_s,
-                                            ref_vel );
+          vector<vector<double>> next_vals = 
+            trajectory_gen( 
+                            previous_path_x, 
+                            previous_path_y, 
+                            car_x, car_y, car_yaw,
+                            car_s, target_lane, 
+                            map_waypoints_x,
+                            map_waypoints_y,
+                            map_waypoints_s,
+                            ref_vel 
+                          );
 
-          /******************************************************************/
+          /********************************************************************************/
 
           json msgJson;
 
