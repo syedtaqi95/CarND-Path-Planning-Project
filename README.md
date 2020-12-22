@@ -1,7 +1,36 @@
 # CarND-Path-Planning-Project
+
 Self-Driving Car Engineer Nanodegree Program
+
+## Model Documentation
+
+My code has 2 functions - ```behaviour_planner()``` and ```generate_trajectory()```. The code is split into 3 files:
+
+- ```main.cpp``` : top-level file which calls my ```behaviour_planner()``` and ```generate_trajectory()``` functions.
+- ```planner.h``` : declares ```behaviour_planner()``` and ```generate_trajectory()```.
+- ```planner.cpp``` : implementation of ```behaviour_planner()``` and ```generate_trajectory()```
+
+I also used the ```spline``` library for trajectory generation. The implementation details for both functions are discussed below.
+
+### behaviour_planner():
+
+This function uses the localisation and sensor fusion data as inputs to calculate ```target_lane``` and ```ref_vel```.
+
+My behaviour planner is implementated without Finite State Machines or cost functions.  On every cycle, it loops through the sensor fusion data to check if the gap to the vehicle in front (in the same lane) is less than 20m, and sets a ```too_close``` flag to ```true``` if so. In parallel, it also stores the number of vehicles in all lanes within s [+20m, -10m] of the ego vehicle. This is useful for making lane changes.
+
+If ```too_close``` is ```true```, it checks if the other lanes are free. If a lane is free, it attempts a lane change. If the other lanes are not free, it reduces ```ref_vel``` until it matches the speed of the car in front.
+
+If ```too_close``` is ```false```, i.e. the lane is clear, the vehicle accelerates upto just under the speed limit (49.5 mph).
+
+### generate_trajectory():
+
+This function uses the localisation data, ```target_lane``` and ```ref_vel``` as inputs to generate a smooth trajectory of 50 (x,y) points using the ```spline``` library.
+
+First, it loads the previous path points. This helps to generate a smooth trajectory. Next, it creates a vector of "anchor points" for the spline. In total there are 5 anchor points - the previous ego position, current ego position, and predicted ego positions 30m, 60m, and 90m ahead in the ```target_lane```. Before creating the spline, I transformed the anchor points from global coordinates to local coordinates. This makes the math easy and more robust. I then split up the spline into ```N``` points which is where ```ref_vel``` is used. And finally, I used the spline to get the (x,y) points until I have a total 50 points. I converted the points back to global coordinates and assigned them to my output. 
+
+---
    
-### Simulator.
+### Simulator
 You can download the Term3 Simulator which contains the Path Planning Project from the [releases tab (https://github.com/udacity/self-driving-car-sim/releases/tag/T3_v1.2).  
 
 To run the simulator on Mac/Linux, first make the binary file executable with the following command:
