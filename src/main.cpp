@@ -154,7 +154,7 @@ int main() {
 
           // Trajectory generation          
           vector<vector<double>> next_vals = 
-            trajectory_gen( 
+            generate_trajectory( 
                             previous_path_x, 
                             previous_path_y, 
                             car_x, car_y, car_yaw,

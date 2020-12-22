@@ -10,7 +10,7 @@ using std::vector;
 
 
 
-vector<vector<double>> trajectory_gen( const vector<double> &previous_path_x, 
+vector<vector<double>> generate_trajectory( const vector<double> &previous_path_x, 
                                        const vector<double> &previous_path_y, 
                                        double &car_x, double &car_y, double &car_yaw,
                                        double &car_s, double &target_lane, 
